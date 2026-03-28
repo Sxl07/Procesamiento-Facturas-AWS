@@ -1,20 +1,28 @@
 #!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib/core';
-import { InfraStack } from '../lib/infra-stack';
+import * as cdk from 'aws-cdk-lib';
+import { PlatformBaseStack } from '../lib/stacks/platform-base-stack';
+import { buildCommonTags } from '../lib/config/tags';
+import {
+  EnvironmentName,
+  environmentConfigs,
+} from '../lib/config/environments';
 
 const app = new cdk.App();
-new InfraStack(app, 'InfraStack', {
-  /* If you don't specify 'env', this stack will be environment-agnostic.
-   * Account/Region-dependent features and context lookups will not work,
-   * but a single synthesized template can be deployed anywhere. */
 
-  /* Uncomment the next line to specialize this stack for the AWS Account
-   * and Region that are implied by the current CLI configuration. */
-  // env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_DEFAULT_REGION },
+const environmentName = (app.node.tryGetContext('env') ?? 'dev') as EnvironmentName;
+const config = environmentConfigs[environmentName];
 
-  /* Uncomment the next line if you know exactly what Account and Region you
-   * want to deploy the stack to. */
-  // env: { account: '123456789012', region: 'us-east-1' },
+if (!config) {
+  throw new Error(
+    `Invalid environment "${environmentName}". Allowed values: ${Object.keys(environmentConfigs).join(', ')}`
+  );
+}
 
-  /* For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html */
+new PlatformBaseStack(app, config.stackName, {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: config.awsRegion,
+  },
+  tags: buildCommonTags(config),
+  config,
 });
