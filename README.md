@@ -16,3 +16,4 @@ Se usa Conventional Commits.
 - hotfix/* sale de main
 - PR obligatorio hacia develop o main
 
+
