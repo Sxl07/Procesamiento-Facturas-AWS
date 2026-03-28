@@ -2,14 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 
-export class InfraStack extends cdk.Stack {
+export class PlatformBaseStack extends cdk.Stack {
+  public readonly invoicesBucket: s3.Bucket;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const invoicesBucket = new s3.Bucket(this, 'InvoicesBucket', {
-      bucketName: this.account && this.region
-        ? `invoice-ai-platform-docs-${this.account}-${this.region}`
-        : undefined,
+    this.invoicesBucket = new s3.Bucket(this, 'InvoicesBucket', {
+      bucketName:
+        this.account && this.region
+          ? `invoice-ai-platform-docs-${this.account}-${this.region}`
+          : undefined,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -20,7 +23,7 @@ export class InfraStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'InvoicesBucketName', {
-      value: invoicesBucket.bucketName,
+      value: this.invoicesBucket.bucketName,
       description: 'Nombre del bucket principal de documentos',
     });
 

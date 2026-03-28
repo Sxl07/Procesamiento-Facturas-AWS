@@ -1,19 +1,14 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { InfraStack } from '../lib/infra-stack';
+import { PlatformBaseStack } from '../lib/stacks/platform-base-stack';
+import { commonTags } from '../lib/config/tags';
 
 const app = new cdk.App();
 
-new InfraStack(app, 'InvoiceAiPlatformDevStack', {
+new PlatformBaseStack(app, 'InvoiceAiPlatformDevStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
   },
-  tags: {
-    Project: 'InvoiceAiPlatform',
-    Environment: 'dev',
-    Owner: 'Sebastian',
-    DataClassification: 'Internal',
-    ManagedBy: 'CDK',
-  },
+  tags: commonTags,
 });
