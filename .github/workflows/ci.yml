@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validate backend if present
+        run: |
+          if [ -f backend/pom.xml ]; then
+            cd backend
+            mvn -B clean verify
+          else
+            echo "No backend/pom.xml yet, skipping Maven build"
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Validate frontend if present
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            npm ci
+            npm run build --if-present
+            npm test --if-present -- --watch=false
+          else
+            echo "No frontend/package.json yet, skipping Node build"
+          fi
