@@ -15,3 +15,4 @@ Se usa Conventional Commits.
 - feature/* sale de develop
 - hotfix/* sale de main
 - PR obligatorio hacia develop o main
+
