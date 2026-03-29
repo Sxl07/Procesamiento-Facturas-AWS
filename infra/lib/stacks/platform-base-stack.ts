@@ -11,6 +11,7 @@ export interface PlatformBaseStackProps extends cdk.StackProps {
 }
 
 export class PlatformBaseStack extends cdk.Stack {
+  public readonly userPoolDomain: cognito.UserPoolDomain;
   public readonly frontendBucket: s3.Bucket;
   public readonly invoicesBucket: s3.Bucket;
   public readonly auditLogsBucket: s3.Bucket;
@@ -108,14 +109,40 @@ export class PlatformBaseStack extends cdk.Stack {
     });
 
     this.userPoolClient = new cognito.UserPoolClient(this, 'InvoiceAiWebClient', {
-      userPool: this.userPool,
-      userPoolClientName: `${config.resourcePrefix}-web-client`,
-      authFlows: {
-        userPassword: true,
-        userSrp: true,
-      },
-      generateSecret: false,
-    });
+  userPool: this.userPool,
+  userPoolClientName: `${config.resourcePrefix}-web-client`,
+  authFlows: {
+    userPassword: true,
+    userSrp: true,
+  },
+  generateSecret: false,
+  oAuth: {
+    flows: {
+      authorizationCodeGrant: true,
+    },
+    scopes: [
+      cognito.OAuthScope.OPENID,
+      cognito.OAuthScope.EMAIL,
+      cognito.OAuthScope.PROFILE,
+    ],
+    callbackUrls: [
+      'http://localhost:4200/auth/callback',
+    ],
+    logoutUrls: [
+      'http://localhost:4200/',
+    ],
+  },
+  supportedIdentityProviders: [
+    cognito.UserPoolClientIdentityProvider.COGNITO,
+  ],
+});
+
+  this.userPoolDomain = new cognito.UserPoolDomain(this, 'InvoiceAiUserPoolDomain', {
+  userPool: this.userPool,
+  cognitoDomain: {
+    domainPrefix: `${config.resourcePrefix}-auth-${this.account?.toLowerCase()}`,
+  },
+});
 
     new cognito.CfnUserPoolGroup(this, 'InvoiceAdminsGroup', {
       userPoolId: this.userPool.userPoolId,
@@ -134,6 +161,24 @@ export class PlatformBaseStack extends cdk.Stack {
       stringValue: config.environmentName,
       description: 'Active environment name for the Invoice AI Platform',
     });
+
+    new ssm.StringParameter(this, 'UserPoolDomainBaseUrlParameter', {
+  parameterName: `${parameterBasePath}/cognito/domain-base-url`,
+  stringValue: `https://${this.userPoolDomain.domainName}.auth.${config.awsRegion}.amazoncognito.com`,
+  description: 'Cognito hosted UI domain base URL',
+});
+
+new ssm.StringParameter(this, 'FrontendCallbackUrlParameter', {
+  parameterName: `${parameterBasePath}/cognito/frontend-callback-url`,
+  stringValue: 'http://localhost:4200/auth/callback',
+  description: 'Frontend callback URL for Cognito sign-in',
+});
+
+new ssm.StringParameter(this, 'FrontendLogoutUrlParameter', {
+  parameterName: `${parameterBasePath}/cognito/frontend-logout-url`,
+  stringValue: 'http://localhost:4200/',
+  description: 'Frontend logout URL for Cognito sign-out',
+});
 
     new ssm.StringParameter(this, 'AwsRegionParameter', {
       parameterName: `${parameterBasePath}/platform/aws-region`,
@@ -216,5 +261,10 @@ export class PlatformBaseStack extends cdk.Stack {
       value: cdk.Stack.of(this).region,
       description: 'Region donde se sintetiza o despliega la stack',
     });
+
+    new cdk.CfnOutput(this, 'UserPoolDomainBaseUrl', {
+  value: `https://${this.userPoolDomain.domainName}.auth.${config.awsRegion}.amazoncognito.com`,
+  description: 'Cognito hosted UI domain base URL',
+});
   }
 }
