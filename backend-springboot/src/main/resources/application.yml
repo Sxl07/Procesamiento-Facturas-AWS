@@ -1,6 +1,11 @@
 spring:
   application:
     name: backend-springboot
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${COGNITO_ISSUER_URI}
 
 management:
   endpoints:
@@ -10,3 +15,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+app:
+  security:
+    cognito:
+      client-id: ${COGNITO_CLIENT_ID}
