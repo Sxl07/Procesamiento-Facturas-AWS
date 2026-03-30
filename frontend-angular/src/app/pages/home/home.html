@@ -1,4 +1,18 @@
 <section>
   <h2>Frontend bootstrap completed</h2>
   <p>Angular base project is running successfully.</p>
+
+  <p>
+    Estado de sesión:
+    <strong>{{ authService.isAuthenticated() ? 'Autenticado' : 'No autenticado' }}</strong>
+  </p>
+
+  <div>
+    <button type="button" routerLink="/login" *ngIf="!authService.isAuthenticated()">Ir a login</button>
+    <button type="button" (click)="callMe()" *ngIf="authService.isAuthenticated()">Probar /api/me</button>
+    <button type="button" (click)="logout()" *ngIf="authService.isAuthenticated()">Cerrar sesión</button>
+  </div>
+
+  <pre *ngIf="meResponse">{{ meResponse | json }}</pre>
+  <p *ngIf="errorMessage">{{ errorMessage }}</p>
 </section>
