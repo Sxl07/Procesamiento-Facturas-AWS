@@ -4,6 +4,7 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { EnvironmentConfig } from '../config/environments';
 
 export interface PlatformBaseStackProps extends cdk.StackProps {
@@ -18,6 +19,7 @@ export class PlatformBaseStack extends cdk.Stack {
   public readonly trail: cloudtrail.Trail;
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
+  public readonly invoiceMetadataTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props: PlatformBaseStackProps) {
     super(scope, id, props);
@@ -40,18 +42,52 @@ export class PlatformBaseStack extends cdk.Stack {
     });
 
     this.invoicesBucket = new s3.Bucket(this, 'InvoicesBucket', {
-      bucketName:
-        this.account && this.region
-          ? `${config.resourcePrefix}-docs-${this.account}-${this.region}`
-          : undefined,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      publicReadAccess: false,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      autoDeleteObjects: false,
-    });
+  bucketName:
+    this.account && this.region
+      ? `${config.resourcePrefix}-docs-${this.account}-${this.region}`
+      : undefined,
+  versioned: true,
+  encryption: s3.BucketEncryption.S3_MANAGED,
+  blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+  enforceSSL: true,
+  publicReadAccess: false,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
+  autoDeleteObjects: false,
+  cors: [
+    {
+      allowedMethods: [
+        s3.HttpMethods.PUT,
+        s3.HttpMethods.GET,
+        s3.HttpMethods.HEAD,
+      ],
+      allowedOrigins: [
+        'http://localhost:4200',
+      ],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+      ],
+      exposedHeaders: [
+        'ETag',
+      ],
+      maxAge: 3000,
+    },
+  ],
+});
+
+    this.invoiceMetadataTable = new dynamodb.Table(this, 'InvoiceMetadataTable', {
+  tableName: `${config.resourcePrefix}-invoice-metadata`,
+  partitionKey: {
+    name: 'invoiceId',
+    type: dynamodb.AttributeType.STRING,
+  },
+  billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+  pointInTimeRecoverySpecification: {
+  pointInTimeRecoveryEnabled: true,
+},
+  encryption: dynamodb.TableEncryption.AWS_MANAGED,
+  removalPolicy: cdk.RemovalPolicy.RETAIN,
+});
 
     this.auditLogsBucket = new s3.Bucket(this, 'AuditLogsBucket', {
       bucketName:
@@ -137,7 +173,7 @@ export class PlatformBaseStack extends cdk.Stack {
   ],
 });
 
-  this.userPoolDomain = new cognito.UserPoolDomain(this, 'InvoiceAiUserPoolDomain', {
+this.userPoolDomain = new cognito.UserPoolDomain(this, 'InvoiceAiUserPoolDomain', {
   userPool: this.userPool,
   cognitoDomain: {
     domainPrefix: `${config.resourcePrefix}-auth-${this.account?.toLowerCase()}`,
@@ -197,6 +233,18 @@ new ssm.StringParameter(this, 'FrontendLogoutUrlParameter', {
       stringValue: this.invoicesBucket.bucketName,
       description: 'Main S3 bucket name for invoice documents',
     });
+
+    new ssm.StringParameter(this, 'InvoiceMetadataTableNameParameter', {
+  parameterName: `${parameterBasePath}/dynamodb/invoice-metadata-table-name`,
+  stringValue: this.invoiceMetadataTable.tableName,
+  description: 'DynamoDB table name for invoice metadata',
+});
+
+new ssm.StringParameter(this, 'InvoicesUploadPrefixParameter', {
+  parameterName: `${parameterBasePath}/s3/invoices-upload-prefix`,
+  stringValue: 'incoming/',
+  description: 'Base prefix for secure invoice uploads',
+});
 
     new ssm.StringParameter(this, 'AuditLogsBucketNameParameter', {
       parameterName: `${parameterBasePath}/s3/audit-logs-bucket-name`,
@@ -265,6 +313,16 @@ new ssm.StringParameter(this, 'FrontendLogoutUrlParameter', {
     new cdk.CfnOutput(this, 'UserPoolDomainBaseUrl', {
   value: `https://${this.userPoolDomain.domainName}.auth.${config.awsRegion}.amazoncognito.com`,
   description: 'Cognito hosted UI domain base URL',
+});
+
+new cdk.CfnOutput(this, 'InvoiceMetadataTableName', {
+  value: this.invoiceMetadataTable.tableName,
+  description: 'Nombre de la tabla DynamoDB de metadata de facturas',
+});
+
+new cdk.CfnOutput(this, 'InvoicesUploadPrefix', {
+  value: 'incoming/',
+  description: 'Prefijo base para uploads seguros de facturas',
 });
   }
 }
