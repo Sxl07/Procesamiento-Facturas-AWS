@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { authConfig } from '../config/auth.config';
 
 export interface TokenResponse {
   access_token: string;
@@ -16,11 +17,11 @@ export interface TokenResponse {
 export class AuthService {
   private readonly http = inject(HttpClient);
 
-  private readonly cognitoDomain = 'https://invoice-ai-platform-dev-auth-017601971421.auth.us-east-1.amazoncognito.com';
-  private readonly clientId = '290dbnul3baj9as6ii45r29qoe';
-  private readonly redirectUri = 'http://localhost:4200/auth/callback';
-  private readonly logoutUri = 'http://localhost:4200/';
-  private readonly apiBaseUrl = 'http://localhost:8080';
+  private readonly cognitoDomain = authConfig.cognitoDomain;
+  private readonly clientId = authConfig.clientId;
+  private readonly redirectUri = authConfig.redirectUri;
+  private readonly logoutUri = authConfig.logoutUri;
+  private readonly apiBaseUrl = authConfig.apiBaseUrl;
 
   login(): void {
     const codeVerifier = this.generateRandomString(64);
