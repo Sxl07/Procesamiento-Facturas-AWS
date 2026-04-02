@@ -20,9 +20,12 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class InvoiceRegistrationService {
-
+    private static final Logger log = LoggerFactory.getLogger(InvoiceRegistrationService.class);
     private static final String STATUS_UPLOADED = "UPLOADED";
 
     private final DynamoDbClient dynamoDbClient;
@@ -40,9 +43,17 @@ public class InvoiceRegistrationService {
     }
 
     public RegisterInvoiceResponse registerInvoice(String userId, RegisterInvoiceRequest request) {
+        log.info("Starting invoice registration for userId={} invoiceId={} objectKey={}",
+        userId,
+        request.getInvoiceId(),
+        request.getObjectKey());
         validateRequest(userId, request);
+        log.info("Validation passed for register request invoiceId={}", request.getInvoiceId());
+        log.info("Validating object existence in S3 bucket={} key={}",
+        uploadsProperties.getBucketName(),
+        request.getObjectKey());
         ensureObjectExists(request.getObjectKey());
-
+        log.info("Confirmed object exists in S3 for invoiceId={}", request.getInvoiceId());
         String now = Instant.now().toString();
 
         Map<String, AttributeValue> item = new HashMap<>();
@@ -64,7 +75,11 @@ public class InvoiceRegistrationService {
                 .build();
 
         try {
+            log.info("Writing invoice metadata to DynamoDB table={} for invoiceId={}",
+        uploadsProperties.getInvoiceMetadataTable(),
+        request.getInvoiceId());
             dynamoDbClient.putItem(putItemRequest);
+            log.info("Invoice metadata stored successfully for invoiceId={}", request.getInvoiceId());
         } catch (ConditionalCheckFailedException ex) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
@@ -120,6 +135,7 @@ public class InvoiceRegistrationService {
 
     private void ensureObjectExists(String objectKey) {
         try {
+            
             s3Client.headObject(HeadObjectRequest.builder()
                     .bucket(uploadsProperties.getBucketName())
                     .key(objectKey)

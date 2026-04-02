@@ -1,18 +1,127 @@
-<section>
-  <h2>Frontend bootstrap completed</h2>
-  <p>Angular base project is running successfully.</p>
+<section class="page-shell">
+  <div class="hero-card">
+    <div class="hero-copy">
+      <p class="eyebrow">Sprint 3 · Upload seguro de facturas</p>
+      <h1>Procesamiento de facturas con carga directa a S3</h1>
+      <p class="hero-text">
+        Sube facturas PDF de forma segura usando una URL prefirmada, registra la metadata en DynamoDB
+        y valida el flujo completo de punta a punta.
+      </p>
+    </div>
 
-  <p>
-    Estado de sesión:
-    <strong>{{ authService.isAuthenticated() ? 'Autenticado' : 'No autenticado' }}</strong>
-  </p>
+    <div class="session-card">
+      <p class="session-label">Estado de sesión</p>
+      <p class="session-value" [ngClass]="authService.isAuthenticated() ? 'is-authenticated' : 'is-anonymous'">
+        {{ authService.isAuthenticated() ? 'Autenticado' : 'No autenticado' }}
+      </p>
 
-  <div>
-    <button type="button" routerLink="/login" *ngIf="!authService.isAuthenticated()">Ir a login</button>
-    <button type="button" (click)="callMe()" *ngIf="authService.isAuthenticated()">Probar /api/me</button>
-    <button type="button" (click)="logout()" *ngIf="authService.isAuthenticated()">Cerrar sesión</button>
+      <div class="session-actions">
+        <button type="button" class="secondary-button" routerLink="/login" *ngIf="!authService.isAuthenticated()">
+          Ir a login
+        </button>
+
+        <button type="button" class="secondary-button" (click)="callMe()" *ngIf="authService.isAuthenticated()">
+          Probar /api/me
+        </button>
+
+        <button type="button" class="ghost-button" (click)="logout()" *ngIf="authService.isAuthenticated()">
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
   </div>
 
+  <div class="content-grid">
+    <article class="upload-card">
+      <div class="section-header">
+        <h2>Subir factura PDF</h2>
+        <p>
+          Selecciona un archivo PDF, solicita la URL prefirmada, súbelo a S3 y registra la factura
+          en DynamoDB.
+        </p>
+      </div>
+
+      <div class="upload-panel">
+        <label class="file-picker">
+          <span>Seleccionar archivo PDF</span>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            (change)="onFileSelected($event)"
+            [disabled]="isBusy"
+          />
+        </label>
+
+        <div class="file-summary">
+          <div>
+            <p class="summary-label">Archivo</p>
+            <p class="summary-value">{{ selectedFileName }}</p>
+          </div>
+
+          <div>
+            <p class="summary-label">Tamaño</p>
+            <p class="summary-value">{{ selectedFileSizeLabel }}</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="primary-button"
+          (click)="uploadInvoice()"
+          [disabled]="!selectedFile || isBusy || !authService.isAuthenticated()"
+        >
+          {{ isBusy ? 'Procesando...' : 'Subir factura' }}
+        </button>
+
+        <div class="status-box" [ngClass]="{
+          'status-busy': isBusy,
+          'status-success': !!uploadSuccessMessage,
+          'status-error': !!uploadErrorMessage
+        }">
+          <p class="status-text">{{ uploadStatusLabel }}</p>
+
+          <div class="progress-wrapper" *ngIf="isUploadingFile || isRegisteringInvoice || uploadSuccessMessage">
+            <div class="progress-bar">
+              <div class="progress-bar-fill" [style.width.%]="uploadProgress"></div>
+            </div>
+            <span class="progress-value">{{ uploadProgress }}%</span>
+          </div>
+        </div>
+
+        <div class="feedback success" *ngIf="uploadSuccessMessage">
+          <p>{{ uploadSuccessMessage }}</p>
+          <p><strong>Invoice ID:</strong> {{ uploadedInvoiceId }}</p>
+          <p class="break-all"><strong>Object Key:</strong> {{ uploadedObjectKey }}</p>
+        </div>
+
+        <div class="feedback error" *ngIf="uploadErrorMessage">
+          <p>{{ uploadErrorMessage }}</p>
+        </div>
+      </div>
+    </article>
+
+    <aside class="info-card">
+      <div class="section-header">
+        <h2>Checklist de validación</h2>
+        <p>Qué deberías poder confirmar después de cada prueba.</p>
+      </div>
+
+      <ul class="checklist">
+        <li>La URL prefirmada se genera correctamente desde el backend.</li>
+        <li>El archivo PDF se sube a S3 con método PUT.</li>
+        <li>La metadata queda registrada en DynamoDB con estado <strong>UPLOADED</strong>.</li>
+        <li>El usuario autenticado queda asociado al registro de la factura.</li>
+      </ul>
+
+      <div class="api-box">
+  <p class="summary-label">Respuesta actual de /api/me</p>
+  <p *ngIf="isCallingMe">Consultando endpoint <code>/api/me</code>...</p>
   <pre *ngIf="meResponse">{{ meResponse | json }}</pre>
-  <p *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p class="error-inline" *ngIf="errorMessage">{{ errorMessage }}</p>
+  <p *ngIf="!isCallingMe && !meResponse && !errorMessage">
+    Aún no has consultado el endpoint <code>/api/me</code>.
+  </p>
+</div>
+    </aside>
+  </div>
 </section>

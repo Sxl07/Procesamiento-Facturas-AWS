@@ -12,6 +12,7 @@ public class PresignUploadResponse {
         this.objectKey = objectKey;
         this.uploadUrl = uploadUrl;
         this.expiresInSeconds = expiresInSeconds;
+        
     }
 
     public String getInvoiceId() {
