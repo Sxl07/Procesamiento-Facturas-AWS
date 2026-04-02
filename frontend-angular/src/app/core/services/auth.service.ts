@@ -11,6 +11,10 @@ export interface TokenResponse {
   scope?: string;
 }
 
+interface JwtPayload {
+  exp?: number;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -24,6 +28,8 @@ export class AuthService {
   private readonly apiBaseUrl = authConfig.apiBaseUrl;
 
   login(): void {
+    this.clearTransientAuthState();
+
     const codeVerifier = this.generateRandomString(64);
     const state = this.generateRandomString(32);
 
@@ -39,7 +45,8 @@ export class AuthService {
         `&scope=${encodeURIComponent('openid email profile')}` +
         `&state=${encodeURIComponent(state)}` +
         `&code_challenge_method=S256` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}`;
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&prompt=login`;
 
       window.location.href = authorizeUrl;
     });
@@ -88,19 +95,26 @@ export class AuthService {
   }
 
   getAccessToken(): string | null {
-    return sessionStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token');
+
+    if (!token) {
+      return null;
+    }
+
+    if (this.isTokenExpired(token)) {
+      this.clearSession();
+      return null;
+    }
+
+    return token;
   }
 
   isAuthenticated(): boolean {
-    return !!this.getAccessToken();
+    return this.getAccessToken() !== null;
   }
 
   logout(): void {
-    sessionStorage.removeItem('access_token');
-    sessionStorage.removeItem('id_token');
-    sessionStorage.removeItem('refresh_token');
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('oauth_state');
+    this.clearSession();
 
     const logoutUrl =
       `${this.cognitoDomain}/logout` +
@@ -112,6 +126,46 @@ export class AuthService {
 
   getApiBaseUrl(): string {
     return this.apiBaseUrl;
+  }
+
+  clearSession(): void {
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('id_token');
+    sessionStorage.removeItem('refresh_token');
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('oauth_state');
+  }
+
+  private clearTransientAuthState(): void {
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('oauth_state');
+  }
+
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = this.parseJwtPayload(token);
+      if (!payload?.exp) {
+        return true;
+      }
+
+      const nowInSeconds = Math.floor(Date.now() / 1000);
+      return payload.exp <= nowInSeconds;
+    } catch {
+      return true;
+    }
+  }
+
+  private parseJwtPayload(token: string): JwtPayload | null {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    const json = atob(padded);
+
+    return JSON.parse(json) as JwtPayload;
   }
 
   private generateRandomString(length: number): string {

@@ -16,11 +16,14 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service
 public class UploadService {
 
     private static final long PRESIGNED_URL_EXPIRATION_SECONDS = 300L;
-
+    private static final Logger log = LoggerFactory.getLogger(UploadService.class);
     private final S3Presigner s3Presigner;
     private final UploadsProperties uploadsProperties;
 
@@ -30,25 +33,30 @@ public class UploadService {
     }
 
     public PresignUploadResponse createPresignedUpload(String userId, PresignUploadRequest request) {
+        log.info("Starting presign generation for userId={} fileName={} contentType={} sizeBytes={}",
+        userId,
+        request.getFileName(),
+        request.getContentType(),
+        request.getSizeBytes());
         validateRequest(request);
-
+        log.info("Validation passed for userId={} fileName={}", userId, request.getFileName());
         String invoiceId = UUID.randomUUID().toString();
         String objectKey = buildObjectKey(userId, invoiceId);
-
+        log.info("Generated invoiceId={} and objectKey={} for userId={}", invoiceId, objectKey, userId);
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(uploadsProperties.getBucketName())
                 .key(objectKey)
                 .contentType(request.getContentType())
                 .build();
-
+        log.info("Calling S3Presigner for bucket={} key={}", uploadsProperties.getBucketName(), objectKey);
         PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
                 .signatureDuration(Duration.ofSeconds(PRESIGNED_URL_EXPIRATION_SECONDS))
                 .putObjectRequest(putObjectRequest)
                 .build();
-
+        log.info("Presigned URL generated successfully for invoiceId={} key={}", invoiceId, objectKey);
         PresignedPutObjectRequest presignedRequest =
                 s3Presigner.presignPutObject(presignRequest);
-
+        
         return new PresignUploadResponse(
                 invoiceId,
                 objectKey,

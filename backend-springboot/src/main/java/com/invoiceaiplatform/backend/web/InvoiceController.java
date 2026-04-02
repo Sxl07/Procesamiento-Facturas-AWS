@@ -13,10 +13,13 @@ import com.invoiceaiplatform.backend.service.InvoiceRegistrationService;
 import com.invoiceaiplatform.backend.web.dto.RegisterInvoiceRequest;
 import com.invoiceaiplatform.backend.web.dto.RegisterInvoiceResponse;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/invoices")
 public class InvoiceController {
-
+    private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
     private final InvoiceRegistrationService invoiceRegistrationService;
 
     public InvoiceController(InvoiceRegistrationService invoiceRegistrationService) {
@@ -28,7 +31,18 @@ public class InvoiceController {
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody RegisterInvoiceRequest request
     ) {
+        log.info("Received register request from userId={} invoiceId={} objectKey={}",
+        jwt.getSubject(),
+        request.getInvoiceId(),
+        request.getObjectKey());
         String userId = jwt.getSubject();
-        return invoiceRegistrationService.registerInvoice(userId, request);
-    }
+        RegisterInvoiceResponse response = invoiceRegistrationService.registerInvoice(userId, request);
+
+log.info("Invoice registered for userId={} invoiceId={} status={}",
+        userId,
+        response.getInvoiceId(),
+        response.getStatus());
+
+return response; 
+}
 }
