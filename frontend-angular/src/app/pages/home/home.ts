@@ -1,7 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { HttpClient, HttpEventType } from '@angular/common/http';
 import { JsonPipe, NgClass, NgIf } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { finalize, filter, map, switchMap, tap } from 'rxjs';
+
 import { AuthService } from '../../core/services/auth.service';
 import {
   InvoiceUploadService,
@@ -17,6 +19,7 @@ import {
 export class Home {
   private readonly http = inject(HttpClient);
   private readonly invoiceUploadService = inject(InvoiceUploadService);
+  private readonly cdr = inject(ChangeDetectorRef);
   protected readonly authService = inject(AuthService);
 
   protected meResponse: unknown = null;
@@ -35,15 +38,19 @@ export class Home {
   protected uploadedInvoiceId = '';
   protected uploadedObjectKey = '';
 
+  private readonly isDevModeEnabled = true;
+
   callMe(): void {
     this.errorMessage = '';
     this.meResponse = null;
     this.isCallingMe = true;
+    this.cdr.detectChanges();
 
     this.http.get(`${this.authService.getApiBaseUrl()}/api/me`).subscribe({
       next: (response) => {
         this.meResponse = response;
         this.isCallingMe = false;
+        this.cdr.detectChanges();
       },
       error: (error) => {
         this.meResponse = null;
@@ -52,12 +59,35 @@ export class Home {
         if (error.status === 401) {
           this.errorMessage = 'La sesión no es válida o expiró. Inicia sesión nuevamente.';
           this.authService.clearSession();
-          return;
+        } else {
+          this.logError('/api/me error', error);
+          this.errorMessage = `Error calling /api/me: ${error.status}`;
         }
-        console.error('[home] presign error', error);
-        this.errorMessage = `Error calling /api/me: ${error.status}`;
+
+        this.cdr.detectChanges();
       },
     });
+  }
+
+  private logDebug(message: string, data?: unknown): void {
+    if (!this.isDevModeEnabled) {
+      return;
+    }
+
+    if (data !== undefined) {
+      console.log(`[home] ${message}`, data);
+      return;
+    }
+
+    console.log(`[home] ${message}`);
+  }
+
+  private logError(message: string, error: unknown): void {
+    if (!this.isDevModeEnabled) {
+      return;
+    }
+
+    console.error(`[home] ${message}`, error);
   }
 
   onFileSelected(event: Event): void {
@@ -68,10 +98,10 @@ export class Home {
     this.uploadProgress = 0;
     this.uploadedInvoiceId = '';
     this.uploadedObjectKey = '';
-    
+
     if (!file) {
-      
       this.selectedFile = null;
+      this.cdr.detectChanges();
       return;
     }
 
@@ -79,6 +109,7 @@ export class Home {
       this.selectedFile = null;
       this.uploadErrorMessage = 'Solo se permiten archivos PDF.';
       input.value = '';
+      this.cdr.detectChanges();
       return;
     }
 
@@ -86,6 +117,7 @@ export class Home {
       this.selectedFile = null;
       this.uploadErrorMessage = 'El archivo debe tener content type application/pdf.';
       input.value = '';
+      this.cdr.detectChanges();
       return;
     }
 
@@ -94,114 +126,144 @@ export class Home {
       this.selectedFile = null;
       this.uploadErrorMessage = 'El archivo supera el tamaño máximo permitido de 10 MB.';
       input.value = '';
+      this.cdr.detectChanges();
       return;
     }
-    console.log('[home] file selected', {
-  name: file.name,
-  size: file.size,
-  type: file.type,
-});
+
+    this.logDebug('file selected', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
+
     this.selectedFile = file;
+    this.cdr.detectChanges();
   }
 
   uploadInvoice(): void {
     if (!this.selectedFile) {
       this.uploadErrorMessage = 'Selecciona un archivo PDF antes de continuar.';
+      this.cdr.detectChanges();
       return;
     }
 
     if (!this.authService.isAuthenticated()) {
       this.uploadErrorMessage = 'Debes iniciar sesión para subir una factura.';
+      this.cdr.detectChanges();
       return;
     }
 
     const file = this.selectedFile;
-    console.log('[home] uploadInvoice() started', {
-  fileName: file.name,
-  fileSize: file.size,
-  fileType: file.type,
-  authenticated: this.authService.isAuthenticated(),
-});
+    const startedAt = performance.now();
+
     this.resetUploadMessages();
     this.uploadProgress = 0;
+    this.uploadedInvoiceId = '';
+    this.uploadedObjectKey = '';
     this.isRequestingPresign = true;
-    console.log('[home] requesting presigned URL...');
-    this.invoiceUploadService.createPresignedUpload(file).subscribe({
-      next: (presignResponse) => {
-        console.log('[home] presigned URL received', presignResponse);
+    this.isUploadingFile = false;
+    this.isRegisteringInvoice = false;
+    this.cdr.detectChanges();
+
+    this.logDebug('uploadInvoice() started', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      authenticated: this.authService.isAuthenticated(),
+    });
+
+    this.invoiceUploadService.createPresignedUpload(file).pipe(
+      tap((presignResponse) => {
         this.isRequestingPresign = false;
         this.isUploadingFile = true;
-        console.log('[home] starting S3 upload...');
-        this.invoiceUploadService.uploadFileToS3(presignResponse.uploadUrl, file).subscribe({
-          next: (event) => {
+        this.cdr.detectChanges();
+
+        this.logDebug('Presigned URL received', {
+          invoiceId: presignResponse.invoiceId,
+          objectKey: presignResponse.objectKey,
+        });
+      }),
+      switchMap((presignResponse) =>
+        this.invoiceUploadService.uploadFileToS3(presignResponse.uploadUrl, file).pipe(
+          tap((event) => {
             if (event.type === HttpEventType.UploadProgress) {
-              console.log('[home] S3 upload progress', {
-  loaded: event.loaded,
-  total: event.total,
-});
               const total = event.total ?? file.size;
               if (total > 0) {
                 this.uploadProgress = Math.round((event.loaded / total) * 100);
               }
-            }
+              this.cdr.detectChanges();
 
-            if (event.type === HttpEventType.Response) {
-              console.log('[home] S3 upload completed, starting register...');
-              this.isUploadingFile = false;
-              this.isRegisteringInvoice = true;
-              this.uploadProgress = 100;
-
-              const registerPayload: RegisterInvoiceRequest = {
-                invoiceId: presignResponse.invoiceId,
-                objectKey: presignResponse.objectKey,
-                originalFileName: file.name,
-                contentType: file.type || 'application/pdf',
-                sizeBytes: file.size,
-              };
-
-              this.invoiceUploadService.registerInvoice(registerPayload).subscribe({
-                next: (registerResponse) => {
-                  console.log('[home] invoice registered successfully', registerResponse);
-                  this.isRegisteringInvoice = false;
-                  this.uploadSuccessMessage = `Factura registrada correctamente con estado ${registerResponse.status}.`;
-                  this.uploadedInvoiceId = registerResponse.invoiceId;
-                  this.uploadedObjectKey = presignResponse.objectKey;
-                  this.selectedFile = null;
-                },
-                error: (error) => {
-                  this.isRegisteringInvoice = false;
-                  this.uploadErrorMessage = this.buildApiErrorMessage(
-                    error,
-                    'No se pudo registrar la factura en DynamoDB.'
-                  );
-                  console.error('[home] S3 upload error', error);
-                },
-                
+              this.logDebug('S3 upload progress', {
+                loaded: event.loaded,
+                total,
+                progress: this.uploadProgress,
               });
             }
-          },
-          error: (error) => {
+          }),
+          filter((event) => event.type === HttpEventType.Response),
+          tap(() => {
             this.isUploadingFile = false;
-            this.uploadErrorMessage = `No se pudo subir el archivo a S3. Código: ${error.status || 'desconocido'}.`;
-            console.error('[home] register error', error);
-          },
-        }
-      );
+            this.isRegisteringInvoice = true;
+            this.uploadProgress = 100;
+            this.cdr.detectChanges();
+
+            this.logDebug('S3 upload completed');
+          }),
+          map(() => presignResponse)
+        )
+      ),
+      switchMap((presignResponse) => {
+        const registerPayload: RegisterInvoiceRequest = {
+          invoiceId: presignResponse.invoiceId,
+          objectKey: presignResponse.objectKey,
+          originalFileName: file.name,
+          contentType: file.type || 'application/pdf',
+          sizeBytes: file.size,
+        };
+
+        this.logDebug('Register payload created', registerPayload);
+
+        return this.invoiceUploadService.registerInvoice(registerPayload).pipe(
+          map((registerResponse) => ({ registerResponse, presignResponse }))
+        );
+      }),
+      finalize(() => {
+        this.isRequestingPresign = false;
+        this.isUploadingFile = false;
+        this.isRegisteringInvoice = false;
+        this.cdr.detectChanges();
+
+        const durationMs = Math.round(performance.now() - startedAt);
+        this.logDebug('uploadInvoice() finished', {
+          durationMs,
+          isRequestingPresign: this.isRequestingPresign,
+          isUploadingFile: this.isUploadingFile,
+          isRegisteringInvoice: this.isRegisteringInvoice,
+        });
+      })
+    ).subscribe({
+      next: ({ registerResponse, presignResponse }) => {
+        this.uploadSuccessMessage = `Factura registrada correctamente con estado ${registerResponse.status}.`;
+        this.uploadedInvoiceId = registerResponse.invoiceId;
+        this.uploadedObjectKey = presignResponse.objectKey;
+        this.selectedFile = null;
+        this.cdr.detectChanges();
+
+        this.logDebug('Invoice registered successfully', registerResponse);
       },
       error: (error) => {
-        this.isRequestingPresign = false;
-        console.error('[home] /api/me error', error);
-
         if (error.status === 401) {
           this.authService.clearSession();
           this.uploadErrorMessage = 'Tu sesión expiró. Inicia sesión nuevamente antes de subir la factura.';
-          return;
+        } else {
+          this.uploadErrorMessage = this.buildApiErrorMessage(
+            error,
+            'Ocurrió un error durante la carga de la factura.'
+          );
         }
 
-        this.uploadErrorMessage = this.buildApiErrorMessage(
-          error,
-          'No se pudo obtener la URL prefirmada.'
-        );
+        this.cdr.detectChanges();
+        this.logError('Upload flow error', error);
       },
     });
   }
@@ -233,7 +295,7 @@ export class Home {
 
   protected get uploadStatusLabel(): string {
     if (this.isRequestingPresign) {
-      return 'Solicitando URL segura de carga...';
+      return 'Solicitando URL segura de carga al backend...';
     }
 
     if (this.isUploadingFile) {
