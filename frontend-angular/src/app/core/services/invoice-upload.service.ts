@@ -37,8 +37,31 @@ export class InvoiceUploadService {
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
 
+  private readonly isDevModeEnabled = true;
+
   private get apiBaseUrl(): string {
     return this.authService.getApiBaseUrl();
+  }
+
+  private logDebug(message: string, data?: unknown): void {
+    if (!this.isDevModeEnabled) {
+      return;
+    }
+
+    if (data !== undefined) {
+      console.log(`[upload-service] ${message}`, data);
+      return;
+    }
+
+    console.log(`[upload-service] ${message}`);
+  }
+
+  private logError(message: string, error: unknown): void {
+    if (!this.isDevModeEnabled) {
+      return;
+    }
+
+    console.error(`[upload-service] ${message}`, error);
   }
 
   createPresignedUpload(file: File): Observable<PresignUploadResponse> {
@@ -48,21 +71,21 @@ export class InvoiceUploadService {
       sizeBytes: file.size,
     };
 
-    console.log('[upload-service] POST /api/uploads/presign -> request', payload);
+    this.logDebug('POST /api/uploads/presign -> request', payload);
 
     return this.http.post<PresignUploadResponse>(
       `${this.apiBaseUrl}/api/uploads/presign`,
       payload
     ).pipe(
       tap({
-        next: (response) => console.log('[upload-service] POST /api/uploads/presign <- response', response),
-        error: (error) => console.error('[upload-service] POST /api/uploads/presign <- error', error),
+        next: (response) => this.logDebug('POST /api/uploads/presign <- response', response),
+        error: (error) => this.logError('POST /api/uploads/presign <- error', error),
       })
     );
   }
 
   uploadFileToS3(uploadUrl: string, file: File): Observable<HttpEvent<string>> {
-    console.log('[upload-service] PUT S3 upload -> start', {
+    this.logDebug('PUT S3 upload -> start', {
       uploadUrl,
       fileName: file.name,
       fileSize: file.size,
@@ -78,22 +101,22 @@ export class InvoiceUploadService {
       responseType: 'text',
     }).pipe(
       tap({
-        next: (event) => console.log('[upload-service] PUT S3 upload <- event', event),
-        error: (error) => console.error('[upload-service] PUT S3 upload <- error', error),
+        next: (event) => this.logDebug('PUT S3 upload <- event', event),
+        error: (error) => this.logError('PUT S3 upload <- error', error),
       })
     );
   }
 
   registerInvoice(payload: RegisterInvoiceRequest): Observable<RegisterInvoiceResponse> {
-    console.log('[upload-service] POST /api/invoices/register -> request', payload);
+    this.logDebug('POST /api/invoices/register -> request', payload);
 
     return this.http.post<RegisterInvoiceResponse>(
       `${this.apiBaseUrl}/api/invoices/register`,
       payload
     ).pipe(
       tap({
-        next: (response) => console.log('[upload-service] POST /api/invoices/register <- response', response),
-        error: (error) => console.error('[upload-service] POST /api/invoices/register <- error', error),
+        next: (response) => this.logDebug('POST /api/invoices/register <- response', response),
+        error: (error) => this.logError('POST /api/invoices/register <- error', error),
       })
     );
   }

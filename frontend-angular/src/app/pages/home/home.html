@@ -20,10 +20,6 @@
           Ir a login
         </button>
 
-        <button type="button" class="secondary-button" (click)="callMe()" *ngIf="authService.isAuthenticated()">
-          Probar /api/me
-        </button>
-
         <button type="button" class="ghost-button" (click)="logout()" *ngIf="authService.isAuthenticated()">
           Cerrar sesión
         </button>
@@ -99,29 +95,5 @@
         </div>
       </div>
     </article>
-
-    <aside class="info-card">
-      <div class="section-header">
-        <h2>Checklist de validación</h2>
-        <p>Qué deberías poder confirmar después de cada prueba.</p>
-      </div>
-
-      <ul class="checklist">
-        <li>La URL prefirmada se genera correctamente desde el backend.</li>
-        <li>El archivo PDF se sube a S3 con método PUT.</li>
-        <li>La metadata queda registrada en DynamoDB con estado <strong>UPLOADED</strong>.</li>
-        <li>El usuario autenticado queda asociado al registro de la factura.</li>
-      </ul>
-
-      <div class="api-box">
-  <p class="summary-label">Respuesta actual de /api/me</p>
-  <p *ngIf="isCallingMe">Consultando endpoint <code>/api/me</code>...</p>
-  <pre *ngIf="meResponse">{{ meResponse | json }}</pre>
-  <p class="error-inline" *ngIf="errorMessage">{{ errorMessage }}</p>
-  <p *ngIf="!isCallingMe && !meResponse && !errorMessage">
-    Aún no has consultado el endpoint <code>/api/me</code>.
-  </p>
-</div>
-    </aside>
   </div>
 </section>
